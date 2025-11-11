@@ -16,31 +16,32 @@ const AddExpense = () => {
     const { id } = useParams(); // Get ID from URL
     const [isEditMode, setIsEditMode] = useState(false);
 
-    useEffect(() => {
-        if (id) {
-            setIsEditMode(true);
-            fetchExpenseData(id);
-        }
-    }, [id,fetchExpenseData]);
-
-    const fetchExpenseData = useCallback(async (expenseId) => {
-        setLoading(true);
-        try {
-            const response = await GET(EXPENSE_TYPE_DETAIL(expenseId)); // Use GET helper with URL
-            if (response.status === 200) {
-                form.setFieldsValue({
-                    expense_type: response.data.name,
-                    status: response.data.status,
-                });
-            } else {
-                notification.error({ message: "Error", description: "Failed to load expense data." });
-            }
-        } catch (error) {
+  const fetchExpenseData = useCallback(async (expenseId) => {
+    setLoading(true);
+    try {
+        const response = await GET(EXPENSE_TYPE_DETAIL(expenseId));
+        if (response.status === 200) {
+            form.setFieldsValue({
+                expense_type: response.data.name,
+                status: response.data.status,
+            });
+        } else {
             notification.error({ message: "Error", description: "Failed to load expense data." });
-        } finally {
-            setLoading(false);
         }
-   }, [form]);
+    } catch (error) {
+        notification.error({ message: "Error", description: "Failed to load expense data." });
+    } finally {
+        setLoading(false);
+    }
+}, [form]);
+
+useEffect(() => {
+    if (id) {
+        setIsEditMode(true);
+        fetchExpenseData(id);
+    }
+}, [id, fetchExpenseData]);
+
 
     const onFinish = async (values) => {
         setLoading(true);

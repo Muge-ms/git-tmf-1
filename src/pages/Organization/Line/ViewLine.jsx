@@ -112,9 +112,9 @@ const [isDragMode, setIsDragMode] = useState(true); // switch toggle state
         setTableData(reorderedData);
         setReorder(false);
         setRowReorderred(false);
-        const filtered = header.filter(
-          (item) => !["move", "order"].includes(item.value)
-        );
+        // const filtered = header.filter(
+        //   (item) => !["move", "order"].includes(item.value)
+        // );
         // setTableHeader(filtered);
         setOrder({});
         api.success({

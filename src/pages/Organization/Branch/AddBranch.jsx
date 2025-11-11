@@ -16,31 +16,32 @@ const AddBranch = () => {
   const [agreementFile, setAgreementFile] = useState(null);
   const [additionalFiles, setAdditionalFiles] = useState([]);
 
-  const getBranchDetails = async () => {
+  useEffect(() => {
+  const fetchBranchDetails = async () => {
     setLoader(true);
     const response = await GET_BRANCHES(`${ADD_BRANCH}${params.id}`);
     if (response.status === 200) {
       const { data } = response;
       const agreementFileList = data.agreement_certificate[0]
         ? [
-          {
-            uid: '-1',
-            name: data.agreement_certificate[0].file_name,
-            status: 'done',
-            url: data.agreement_certificate[0].signed_url,
-          },
-        ]
+            {
+              uid: '-1',
+              name: data.agreement_certificate[0].file_name,
+              status: 'done',
+              url: data.agreement_certificate[0].signed_url,
+            },
+          ]
         : [];
       const additionalCertificateDetails = data.additional_details.map((file, index) => ({
         additional_certificate: file
           ? [
-            {
-              uid: `-${index + 1}`,
-              name: file.file_name,
-              status: 'done',
-              url: file.signed_url,
-            },
-          ]
+              {
+                uid: `-${index + 1}`,
+                name: file.file_name,
+                status: 'done',
+                url: file.signed_url,
+              },
+            ]
           : [],
         additional_certifi_description: file?.additional_certifi_description || '',
       }));
@@ -55,21 +56,22 @@ const AddBranch = () => {
     }
     setLoader(false);
   };
-  useEffect(() => {
-    if (params?.id) {
-      getBranchDetails();
-    } else {
-      form.setFieldsValue({
-        additional_certificate_details: [
-          {
-            additional_certificate: [],
-            additional_certifi_description: "",
-          },
-        ],
-      });
-      setAdditionalFiles([null]); // one placeholder slot
-    }
-  }, [params.id, getBranchDetails, form]);
+
+  if (params?.id) {
+    fetchBranchDetails();
+  } else {
+    form.setFieldsValue({
+      additional_certificate_details: [
+        {
+          additional_certificate: [],
+          additional_certifi_description: "",
+        },
+      ],
+    });
+    setAdditionalFiles([null]); // one placeholder slot
+  }
+}, [params.id, form]);
+
 
 
 
