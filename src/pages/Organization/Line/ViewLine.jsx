@@ -58,7 +58,7 @@ const ViewLine = () => {
   const [rowReorderred, setRowReorderred] = useState(false);
   const [tableData, setTableData] = useState([]);
   const [order, setOrder] = useState({});
-  // const [tableHeader, setTableHeader] = useState(header);
+  const [tableHeader, setTableHeader] = useState(header);
   const [api, contextHolder] = notification.useNotification();
   const [tableLoader, setTableLoader] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -112,10 +112,10 @@ const [isDragMode, setIsDragMode] = useState(true); // switch toggle state
         setTableData(reorderedData);
         setReorder(false);
         setRowReorderred(false);
-        // const filtered = header.filter(
-        //   (item) => !["move", "order"].includes(item.value)
-        // );
-        // setTableHeader(filtered);
+        const filtered = header.filter(
+          (item) => !["move", "order"].includes(item.value)
+        );
+        setTableHeader(filtered);
         setOrder({});
         api.success({
           message: "Re-Ordered",
@@ -179,7 +179,13 @@ const [isDragMode, setIsDragMode] = useState(true); // switch toggle state
 
   const clickReorder = () => {
     setReorder(true);
-
+    setTableHeader((prev) => {
+      return [
+        { label: "Move", value: "move" },
+        { label: "Order", value: "order" },
+        ...prev,
+      ];
+    });
   };
 
   const handleReOrder = (event, row) => {
@@ -194,10 +200,10 @@ const [isDragMode, setIsDragMode] = useState(true); // switch toggle state
   };
 
   const handleCancel = () => {
-    // const filtered = header.filter(
-    //   (item) => !["move", "order"].includes(item.value)
-    // );
-    // setTableHeader(filtered);
+    const filtered = header.filter(
+      (item) => !["move", "order"].includes(item.value)
+    );
+    setTableHeader(filtered);
     setReorder(false);
   };
 
