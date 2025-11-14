@@ -15,39 +15,66 @@ const SwipeablePanel = ({
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
+  const isScrolling = useRef(false);
+  const startY = useRef(0);
+
 const { confirm } = Modal;
   const SWIPE_THRESHOLD = 60;
   const BUTTON_WIDTH = 80;
   const TAP_THRESHOLD = 10;
 
   // Only handle swipe on header
-  const handleTouchStart = (e) => {
-    startX.current = e.touches[0].clientX;
-    setIsDragging(true);
-  };
+ const handleTouchStart = (e) => {
+  startX.current = e.touches[0].clientX;
+  startY.current = e.touches[0].clientY;
+  isScrolling.current = false;
+  setIsDragging(true);
+};
 
-  const handleTouchMove = (e) => {
-    const diff = e.touches[0].clientX - startX.current;
-    setOffset(diff);
-  };
 
-  const handleTouchEnd = () => {
-    const diff = offset;
-    const maxSwipe = BUTTON_WIDTH;
+const handleTouchMove = (e) => {
+  const deltaX = e.touches[0].clientX - startX.current;
+  const deltaY = e.touches[0].clientY - startY.current;
 
-    if (diff > SWIPE_THRESHOLD && onSwipeRight) {
-      setOffset(maxSwipe);
-    } else if (diff < -SWIPE_THRESHOLD && onSwipeLeft) {
-      setOffset(-maxSwipe);
-    } else {
-      // Small swipe → treat as tap
-      if (Math.abs(diff) < TAP_THRESHOLD) {
-        onExpandToggle && onExpandToggle(item);
-      }
-      setOffset(0);
-    }
+  // If the user is scrolling vertically more than horizontally → disable swipe
+  if (Math.abs(deltaY) > Math.abs(deltaX)) {
+    isScrolling.current = true;
+    return; // ignore horizontal movement
+  }
+
+  if (!isScrolling.current) {
+    setOffset(deltaX);
+  }
+};
+
+
+ const handleTouchEnd = () => {
+  // If user was scrolling → block click/toggle completely
+  if (isScrolling.current) {
+    setOffset(0);
     setIsDragging(false);
-  };
+    return;
+  }
+
+  const diff = offset;
+  const maxSwipe = BUTTON_WIDTH;
+
+  if (diff > SWIPE_THRESHOLD) {
+    setOffset(maxSwipe);
+  } else if (diff < -SWIPE_THRESHOLD) {
+    setOffset(-maxSwipe);
+  } else {
+    // Only treat as tap **if not dragging/swiping**
+    if (Math.abs(diff) < TAP_THRESHOLD) {
+      onExpandToggle && onExpandToggle(item);
+    }
+    setOffset(0);
+  }
+
+  setIsDragging(false);
+};
+
+
 
   const backgroundColor = offset > 0 ? '#1890ff' : offset < 0 ? '#ff4d4f' : '#fff';
 
