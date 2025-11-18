@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, notification, Grid, List, Avatar, Dropdown, Menu, Select, Modal, Collapse, Badge } from "antd";
+import { Button, notification, Grid, List, Avatar, Dropdown, Menu, Select, Modal, Collapse, Badge,Divider,Skeleton } from "antd";
 import Table from "../../../components/Common/Table";
 import { GET, DELETE, POST } from "helpers/api_helper";
 import { LINE, COLUMNCHANGE, SELECTEDCOLUMN } from "helpers/url_helper";
@@ -11,7 +11,9 @@ import { EllipsisOutlined, SearchOutlined, ReloadOutlined, PlusOutlined, DownOut
 import LineCollapseContent from "components/Common/LineCollapseContent";
 import { Switch, FloatButton } from "antd";
 import reorderIcon from "../../../assets/up-and-down-arrow.png";
-import lineIcon from '../../../assets/industrial-area.png'
+import lineIcon from '../../../assets/residential-area.png'
+import InfiniteScroll from "react-infinite-scroll-component";
+import branchIcon from "../../../assets/images/location.png"
 const { Panel } = Collapse;
 
 let header = [
@@ -83,6 +85,16 @@ const ViewLine = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const [lineDetails, setLineDetails] = useState({});
+   const BRANCH_PAGE_SIZE = 10; // number of headers to load at a time
+  const [visibleBranchCount, setVisibleBranchCount] = useState(BRANCH_PAGE_SIZE);
+  
+
+  const branchList = Object.keys(groupedData);
+  const visibleBranches = branchList.slice(0, visibleBranchCount);
+
+  const loadMoreBranches = () => {
+    setVisibleBranchCount(prev => Math.min(prev + BRANCH_PAGE_SIZE, branchList.length));
+  };
 
   useEffect(() => {
     getSelectedColumn();
@@ -609,193 +621,176 @@ const ViewLine = () => {
         </div>
       ) : (
         // GROUPED LIST VIEW BY BRANCH
-        <div
-          id="scrollableDiv"
-          style={{
-            height: 500,
-            overflow: "auto",
-            padding: 0,
-            marginTop: 20,
-          }}
-        >
-          <Collapse
-            accordion={true}
-            activeKey={expandedBranches}
-            onChange={handleBranchChange}
-            style={{ 
-              background: "#fff",
-              border: "none"
-            }}
-            expandIcon={({ isActive }) => 
-              isActive ? <DownOutlined style={{ fontSize: 12 }} /> : <RightOutlined style={{ fontSize: 12 }} />
-            }
-          >
-            {Object.keys(groupedData).map((branchName) => {
-              const isActive = expandedBranches.includes(branchName);
-              
-              return (
-                <Panel
-                  header={
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                      <span style={{ fontWeight: 600, fontSize: "18px", color: "#262626"}}>
-                        {branchName}
-                      </span>
-                      <Badge 
-                        count={groupedData[branchName].length} 
-                        style={{ 
-                          backgroundColor: "#52c41a",
-                          fontWeight: 500,
-                          boxShadow: "0 0 0 1px #fff"
-                        }} 
-                      />
-                    </div>
-                  }
-                  key={branchName}
-                  style={{
-                    marginBottom: "12px",
-                    border: "1px solid #e8e8e8",
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    backgroundColor: isActive ? "#f5f5f5" : "#fff"
-                  }}
-                  className={isActive ? "active-panel" : ""}
-                >
-                <List
-                  dataSource={groupedData[branchName]}
-                  style={{ background: "#fafafa" }}
-                  renderItem={(line) => {
-                    const isExpanded = expandedLines[`${branchName}-${line.id}`];
+       <div
+  id="scrollableDiv"
+  style={{
+    height: 500,
+    width:"auto",
+    overflow: "auto",
+    padding: "10px",
+    marginTop: 20,
+  }}
+>
+  <Collapse
+    accordion={true}
+    activeKey={expandedBranches}
+    onChange={handleBranchChange}
+    
+    style={{
+      background: "#fff",
+      border: "none",
+    }}
+    // expandIconPosition="right"
+    expandIcon={() => null}
+  >
+    {Object.keys(groupedData).map((branchName) => {
+      const isActive = expandedBranches.includes(branchName);
 
-                    return (
-                      <div
-                        key={line.id}
+      return (
+        <Panel
+          header={
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Avatar
+          src={branchIcon} // your branch icon here
+        >
+          {branchName?.charAt(0)?.toUpperCase()}
+        </Avatar>
+        <span style={{ fontWeight: 600, fontSize: "18px", color: "#262626" }}>
+          {branchName}
+        </span>
+      </div>
+              <Badge
+                count={groupedData[branchName].length}
+                style={{
+                  backgroundColor: "#52c41a",
+                  fontWeight: 500,
+                  boxShadow: "0 0 0 1px #fff"
+                }}
+              />
+            </div>
+          }
+          key={branchName}
+          style={{
+            marginBottom: "12px",
+            border: "1px solid #e8e8e8",
+            borderRadius: "8px",
+            overflow: "hidden",
+            backgroundColor: isActive ? "#f5f5f5" : "#fff"
+          }}
+          className={isActive ? "active-panel" : ""}
+        >
+          <InfiniteScroll
+            dataLength={groupedData[branchName].length}
+            next={() => getLineList(branchName)} // function to load more lines for this branch
+            // state per branch for more data
+            loader={<Skeleton avatar paragraph={{ rows: 1 }} active />}
+            endMessage={<Divider plain>End of List ✅</Divider>}
+            scrollableTarget={`scrollableDiv-${branchName}`} 
+          >
+            <div style={{ maxHeight: 280, overflow: "auto" }}>
+            <List
+              dataSource={groupedData[branchName]}
+              style={{ background: "#fafafa" }}
+              renderItem={(line) => {
+                const isExpanded = expandedLines[`${branchName}-${line.id}`];
+
+                return (
+                  <div
+                    key={line.id}
+                    style={{
+                      borderBottom: "2px solid #f0f0f0",
+                      padding: 0,
+                      background: "#fff",
+                      borderRadius: "6px",
+                      overflow: "hidden"
+                    }}
+                  >
+                    {isMobile ? (
+                      <SwipeablePanel
+                        item={line}
+                        index={line.id}
+                        titleKey="lineName"
+                        name="line"
+                        avatarSrc={lineIcon}
+                        onSwipeRight={!isExpanded ? () => handleEditLine(line) : undefined}
+                        onSwipeLeft={!isExpanded ? () => onDelete(line) : undefined}
+                        isExpanded={isExpanded}
+                        onExpandToggle={() => handleLineAction(branchName, line.id)}
+                        renderContent={() => <LineCollapseContent line={line} />}
+                        isSwipeOpen={openSwipeId === line.id}
+                        onSwipeStateChange={(isOpen) => handleSwipeStateChange(line.id, isOpen)}
+                      />
+                    ) : (
+                      <List.Item
+                        onClick={() => handleLineAction(branchName, line.id)}
                         style={{
-                          borderBottom: "1px solid #e8e8e8",
-                          padding: 0,
-                          background: "#fff",
-                          marginBottom: "8px",
-                          borderRadius: "6px",
-                          overflow: "hidden"
+                          cursor: "pointer",
+                          background: isExpanded ? "#f0f5ff" : "#fff",
+                          padding: "12px 16px",
+                          transition: "all 0.3s ease"
                         }}
                       >
-                        {isMobile ? (
-                          <div style={{ padding: 0 }}>
-                            <SwipeablePanel
-                              item={line}
-                              index={line.id}
-                              titleKey="lineName"
-                              name="line"
-                              avatarSrc={lineIcon}
-                              onSwipeRight={
-                                !isExpanded ? () => {
-                                  setOpenSwipeId(null);
-                                  handleEditLine(line);
-                                } : undefined
-                              }
-                              onSwipeLeft={!isExpanded ? () => {
-                                setOpenSwipeId(null);
-                                onDelete(line);
-                              } : undefined}
-                              isExpanded={isExpanded}
-                              onExpandToggle={() => {
-                                setOpenSwipeId(null); // Close any open swipe first
-                                handleLineAction(branchName, line.id);
-                              }}
-                              renderContent={() => <LineCollapseContent line={line} />}
-                              isSwipeOpen={openSwipeId === line.id}
-                              onSwipeStateChange={(isOpen) => handleSwipeStateChange(line.id, isOpen)}
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <List.Item
-                              onClick={() => handleLineAction(branchName, line.id)}
+                        <List.Item.Meta
+                          avatar={
+                            <Avatar
+                              icon={lineIcon}
                               style={{
-                                cursor: "pointer",
-                                background: isExpanded ? "#f0f5ff" : "#fff",
-                                padding: "12px 16px",
-                                transition: "all 0.3s ease"
+                                backgroundColor: "#1677ff",
+                                fontSize: "16px",
+                                fontWeight: 600
                               }}
                             >
-                              <List.Item.Meta
-                                avatar={
-                                  <Avatar 
-                                  icon = {lineIcon}
-                                    style={{ 
-                                      backgroundColor: "#1677ff",
-                                      fontSize: "16px",
-                                      fontWeight: 600
-                                    }}
-                                  >
-                                    {line.lineName?.charAt(0)?.toUpperCase()}
-                                  </Avatar>
-                                }
-                                title={
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      width: "100%",
-                                    }}
-                                  >
-                                    <span style={{ fontWeight: 500, color: "#262626", fontSize: "15px" }}>
-                                      {line.lineName}
-                                    </span>
+                              {line.lineName?.charAt(0)?.toUpperCase()}
+                            </Avatar>
+                          }
+                          title={
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                              <span style={{ fontWeight: 500, color: "#262626", fontSize: "15px" }}>
+                                {line.lineName}
+                              </span>
 
-                                    <Dropdown
-                                      overlay={
-                                        <Menu>
-                                          <Menu.Item onClick={() => handleEditLine(line)}>
-                                            Edit
-                                          </Menu.Item>
-                                          <Menu.Item danger onClick={() => onDelete(line)}>
-                                            Delete
-                                          </Menu.Item>
-                                        </Menu>
-                                      }
-                                      trigger={["click"]}
-                                    >
-                                      <EllipsisOutlined
-                                        style={{
-                                          fontSize: "20px",
-                                          color: "#8c8c8c",
-                                          cursor: "pointer",
-                                          padding: "4px"
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </Dropdown>
-                                  </div>
+                              <Dropdown
+                                overlay={
+                                  <Menu>
+                                    <Menu.Item onClick={() => handleEditLine(line)}>Edit</Menu.Item>
+                                    <Menu.Item danger onClick={() => onDelete(line)}>Delete</Menu.Item>
+                                  </Menu>
                                 }
-                                description={
-                                  <span style={{ fontSize: "13px", color: "#8c8c8c" }}>
-                                    {line.lineType} • {line.installment} installments
-                                  </span>
-                                }
-                              />
-                            </List.Item>
-
-                            {isExpanded && (
-                              <div style={{ 
-                                padding: "5px", 
-                                background: "#fafafa",
-                                borderTop: "1px solid #e8e8e8"
-                              }}>
-                                <LineCollapseContent line={line} />
-                              </div>
-                            )}
-                          </>
+                                trigger={["click"]}
+                              >
+                                <EllipsisOutlined
+                                  style={{ fontSize: "20px", color: "#8c8c8c", cursor: "pointer", padding: "4px" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </Dropdown>
+                            </div>
+                          }
+                          description={
+                            <span style={{ fontSize: "13px", color: "#8c8c8c" }}>
+                              {line.lineType} • {line.installment} installments
+                            </span>
+                          }
+                        />
+                        {isExpanded && (
+                          <div style={{ padding: "5px", background: "#fafafa", borderTop: "1px solid #e8e8e8" }}>
+                            <LineCollapseContent line={line} />
+                          </div>
                         )}
-                      </div>
-                    );
-                  }}
-                />
-              </Panel>
-            );
-          })}
-          </Collapse>
-        </div>
+                      </List.Item>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            </div>
+          </InfiniteScroll>
+        </Panel>
+      );
+    })}
+  </Collapse>
+</div>
+
       )}
 
       {!reOrder && (
