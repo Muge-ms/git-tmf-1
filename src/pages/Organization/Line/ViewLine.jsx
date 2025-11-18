@@ -269,6 +269,7 @@ const ViewLine = () => {
     const filtered = header.filter(
       (item) => !["move", "order"].includes(item.value)
     );
+    setIsDragMode(false);
     setTableHeader(filtered);
     setReorder(false);
     setSelectedBranch(null);
