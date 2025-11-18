@@ -235,7 +235,7 @@ const ListBranch = () => {
   }, []);
 
   return (
-    <div className="page-content" style={{ padding: "16px" }}>
+    <div className="page-content" style={{ padding: "0px" }}>
       {loading && <Loader />}
 
       {/* 🔹 Header Section */}
@@ -244,8 +244,10 @@ const ListBranch = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginLeft: "-20px",
-          marginBottom: "24px",
+         marginTop: "15px",
+        
+          marginBottom: "15px",
+         
           flexWrap: "wrap",
           gap: "12px",
         }}
@@ -289,7 +291,7 @@ const ListBranch = () => {
       >
         <InfiniteScroll
           dataLength={displayedBranches.length}
-          style={{ padding: "0 18px" }}
+          style={{ padding: "10px",margin: 0 }}
           next={fetchMoreBranches}
           hasMore={hasMore}
           loader={<Skeleton avatar paragraph={{ rows: 1 }} active />}
@@ -319,7 +321,7 @@ const ListBranch = () => {
         key={branch.id}
         style={{
           borderBottom: "2px solid #f0f0f0",
-          padding: "0px 0px",
+          padding: 0,
           marginLeft: "-10px",
           marginRight: "-10px",
         }}
