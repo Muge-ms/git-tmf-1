@@ -309,8 +309,8 @@ const TableList = ({
         .odd-row td { background-color: #fafafa !important; }
          td { background-color: #ffffff !important; }
 
-        // /* dragging highlight */
-        // .dragging-row td { background-color: #e6f7ff !important; }
+        /* dragging highlight */
+        .dragging-row td { background-color: #1677ff !important; }
 
         /* hover */
         .ant-table-tbody > tr:hover > td { background-color: #1677ff !important;color: white }
