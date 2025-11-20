@@ -10,9 +10,6 @@ import CustomToast from "components/Common/Toast";
 import withRouter from "components/Common/withRouter";
 import { Link, useNavigate } from "react-router-dom";
 
-
-// Note: Replaced Formik with Ant Design form validation
-
 // import css
 import "../../assets/scss/_login.scss";
 // import images
@@ -21,7 +18,7 @@ import logo from "assets/images/login-logo.png";
 import { GET, POST } from "../../helpers/api_helper";
 import { setUser } from "../../helpers/jwt-token-access/accessToken";
 import { LOGIN_URL, USERS } from "../../helpers/url_helper";
-import { ADD_BRANCH } from "../../helpers/url_helper"; // Add this import
+import { ADD_BRANCH } from "../../helpers/url_helper";
 
 const { Title } = Typography;
 
@@ -179,9 +176,31 @@ function Login() {
 
     // Close modal and navigate
     setBranchModalVisible(false);
-    navigate('/view');
+    navigate('/branch/list');
     
     CustomToast(`Branch "${selectedBranchData?.branch_name}" selected successfully`, "success");
+  };
+
+  // Handle cancel button - close modal and reset everything
+  const handleCancelBranchSelection = () => {
+    // Close the modal
+    setBranchModalVisible(false);
+    
+    // Reset branch selection
+    setSelectedBranch(null);
+    setBranches([]);
+    
+    // Clear access token from localStorage
+    localStorage.removeItem("access_token");
+    
+    // Reset the login form
+    form.resetFields();
+    setHasFormValues(false);
+    setError('');
+    setLoading(false);
+    
+    // Show a message
+    CustomToast("Login cancelled. Please login again.", "info");
   };
 
   
@@ -327,104 +346,104 @@ function Login() {
       </div>
 
       {/* Branch Selection Modal */}
-     {/* Branch Selection Modal */}
-<Modal
-  title={null}
-  open={branchModalVisible}
-  onOk={handleBranchSelection}
-  footer={null}
-  closable={false}
-  maskClosable={false}
-  width={450}
->
-  <div style={{ textAlign: 'center', padding: '24px 0 20px 0' }}>
-    {/* Branch Header - Centered */}
-    <Title level={3} style={{ margin: 0, fontWeight: 600, color: '#262626' }}>
-      Branch
-    </Title>
-    
-    {/* Currently Logged-In as */}
-    <div style={{ marginTop: '16px', fontSize: '15px', color: '#595959' }}>
-      Currently Logged-In as:{' '}
-      <span style={{ 
-        fontWeight: 600, 
-        color: '#1677ff',
-        fontSize: '16px'
-      }}>
-        {form.getFieldValue('username') || 'User'}
-      </span>
-    </div>
-  </div>
-
-  <div style={{ padding: '0 24px 24px 24px' }}>
-    {/* Select Branch Title */}
-    <p style={{ 
-      marginBottom: 12, 
-      color: '#262626', 
-      fontSize: '15px',
-      fontWeight: 500 
-    }}>
-      Select the branch to proceed
-    </p>
-    
-    {branchLoading ? (
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <Spin size="large" />
-        <p style={{ marginTop: 16, color: '#8c8c8c' }}>Loading branches...</p>
-      </div>
-    ) : (
-      <>
-        {/* Branch Dropdown */}
-        <Select
-          style={{ width: "100%", marginBottom: '24px' }}
-          placeholder="Select Branch"
-          size="large"
-          value={selectedBranch}
-          onChange={setSelectedBranch}
-          showSearch
-          optionFilterProp="label"
-          options={branches.map(branch => ({
-            label: branch.branch_name,
-            value: branch.id
-          }))}
-          notFoundContent={
-            <div style={{ textAlign: 'center', padding: '20px' }}>
-              <p>No branches available</p>
-            </div>
-          }
-        />
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Button
-            size="large"
-            style={{ 
-              flex: 1,
-              height: '44px',
-              fontSize: '15px'
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="primary"
-            size="large"
-            onClick={handleBranchSelection}
-            disabled={!selectedBranch}
-            style={{ 
-              flex: 1,
-              height: '44px',
-              fontSize: '15px',
-              fontWeight: 500
-            }}
-          >
-            Continue
-          </Button>
+      <Modal
+        title={null}
+        open={branchModalVisible}
+        onOk={handleBranchSelection}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        width={450}
+      >
+        <div style={{ textAlign: 'center', padding: '24px 0 20px 0' }}>
+          {/* Branch Header - Centered */}
+          <Title level={3} style={{ margin: 0, fontWeight: 600, color: '#262626' }}>
+            Branch Selection
+          </Title>
+          
+          {/* Currently Logged-In as */}
+          <div style={{ marginTop: '16px', fontSize: '15px', color: '#595959' }}>
+            Currently Logged-In as:{' '}
+            <span style={{ 
+              fontWeight: 600, 
+              color: '#1677ff',
+              fontSize: '16px'
+            }}>
+              {form.getFieldValue('username') || 'User'}
+            </span>
+          </div>
         </div>
-      </>
-    )}
-  </div>
-</Modal>
+
+        <div style={{ padding: '0 24px 24px 24px' }}>
+          {/* Select Branch Title */}
+          <p style={{ 
+            marginBottom: 12, 
+            color: '#262626', 
+            fontSize: '15px',
+            fontWeight: 500 
+          }}>
+            Select the branch to proceed
+          </p>
+          
+          {branchLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Spin size="large" />
+              <p style={{ marginTop: 16, color: '#8c8c8c' }}>Loading branches...</p>
+            </div>
+          ) : (
+            <>
+              {/* Branch Dropdown */}
+              <Select
+                style={{ width: "100%", marginBottom: '24px' }}
+                placeholder="Select Branch"
+                size="large"
+                value={selectedBranch}
+                onChange={setSelectedBranch}
+                showSearch
+                optionFilterProp="label"
+                options={branches.map(branch => ({
+                  label: branch.branch_name,
+                  value: branch.id
+                }))}
+                notFoundContent={
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    <p>No branches available</p>
+                  </div>
+                }
+              />
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <Button
+                  size="large"
+                  onClick={handleCancelBranchSelection}
+                  style={{ 
+                    flex: 1,
+                    height: '44px',
+                    fontSize: '15px'
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={handleBranchSelection}
+                  disabled={!selectedBranch}
+                  style={{ 
+                    flex: 1,
+                    height: '44px',
+                    fontSize: '15px',
+                    fontWeight: 500
+                  }}
+                >
+                  Continue
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
       
       <ToastContainer/>
     </>
