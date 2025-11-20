@@ -130,28 +130,52 @@ function Login() {
   const get_user = async(token)=>{
     if(token){
       try {
-        // Fetch user details from /users/me endpoint
-        const userResponse = await GET(`${USERS}me/`);
+        // CRITICAL FIX: Fetch branches FIRST before showing modal
+        setBranchLoading(true);
         
+        // Fetch user details and branches in parallel
+        const [userResponse, branchResponse] = await Promise.all([
+          GET(`${USERS}me/`),
+          GET(ADD_BRANCH)
+        ]);
+        
+        // Handle user response
         if(userResponse.status === 200){
-          // Store user details using setUser method
           setUser(userResponse.data);
         } else {
           setUser(dummyUserData);
         }
-        setLoading(false);
         
-        // Show branch selection modal instead of navigating directly
-        setBranchModalVisible(true);
-        await getBranchesList();
+        // Handle branch response
+        if (branchResponse?.status === 200 && branchResponse.data) {
+          setBranches(branchResponse.data);
+          
+          // If only one branch exists, auto-select it
+          if (branchResponse.data.length === 1) {
+            setSelectedBranch(branchResponse.data[0].id);
+          }
+          
+          // Only show modal after branches are loaded
+          setBranchModalVisible(true);
+        } else {
+          // No branches available
+          CustomToast("No branches available. Please contact administrator.", "error");
+          // Clear token and reset
+          localStorage.removeItem("access_token");
+        }
+        
+        setLoading(false);
+        setBranchLoading(false);
         
       } catch (error) {
+        console.error("Error during login:", error);
         setUser(dummyUserData);
         setLoading(false);
+        setBranchLoading(false);
         
-        // Show branch selection modal even on error
-        setBranchModalVisible(true);
-        await getBranchesList();
+        CustomToast("Failed to load user data or branches. Please try again.", "error");
+        // Clear token on error
+        localStorage.removeItem("access_token");
       }
     }else{
       setLoading(false);
@@ -176,7 +200,7 @@ function Login() {
 
     // Close modal and navigate
     setBranchModalVisible(false);
-    navigate('/branch/list');
+    navigate('/view');
     
     CustomToast(`Branch "${selectedBranchData?.branch_name}" selected successfully`, "success");
   };
