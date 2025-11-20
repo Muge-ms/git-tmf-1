@@ -302,6 +302,33 @@ const ListBranch = () => {
           endMessage={<Divider plain>End of List✅</Divider>}
           scrollableTarget="scrollableDiv"
         >
+           {/* Search Results Header - Show only when searching */}
+    {searchTerm && (
+      <div
+        style={{
+          padding: "12px 0px",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "left"
+        }}
+      >
+        <span style={{ fontSize: "14px", color: "#8c8c8c" }}>
+          Search Results:{" "}
+          <span style={{ fontWeight: 600, color: "#1677ff", fontSize: "15px" }}>
+            "{searchTerm}"
+          </span>
+        </span>
+        <span style={{ 
+          marginLeft: "12px", 
+          fontSize: "13px", 
+          color: "#52c41a",
+          fontWeight: 500 
+        }}>
+          ({displayedBranches.length} result{displayedBranches.length !== 1 ? 's' : ''})
+        </span>
+      </div>
+    )}
           <List
             dataSource={displayedBranches}
             renderItem={(branch) => {
