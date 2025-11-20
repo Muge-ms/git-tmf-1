@@ -87,19 +87,32 @@ const ViewLine = () => {
   const [lineDetails, setLineDetails] = useState({});
    const BRANCH_PAGE_SIZE = 10; // number of headers to load at a time
   const [visibleBranchCount, setVisibleBranchCount] = useState(BRANCH_PAGE_SIZE);
-  
 
   const branchList = Object.keys(groupedData);
   const visibleBranches = branchList.slice(0, visibleBranchCount);
-
-  const loadMoreBranches = () => {
-    setVisibleBranchCount(prev => Math.min(prev + BRANCH_PAGE_SIZE, branchList.length));
-  };
+  const [selectedBranchFromStorage, setSelectedBranchFromStorage] = useState(null);
+const [linesPagination, setLinesPagination] = useState({}); // Track displayed lines per branch
+const LINES_PAGE_SIZE = 3; // Number of lines to load at a time
+ /**
+  * The function `loadMoreBranches` increases the visible branch count by a specified page size or up
+  * to the total number of branches in the list.
+  */
+  // const loadMoreBranches = () => {
+  //   setVisibleBranchCount(prev => Math.min(prev + BRANCH_PAGE_SIZE, branchList.length));
+  // };
 
   useEffect(() => {
     getSelectedColumn();
     getLineList();
   }, []);
+  useEffect(() => {
+  // Get branch from localStorage
+  const storedBranchName = localStorage.getItem("selected_branch_name");
+  setSelectedBranchFromStorage(storedBranchName);
+  
+  getSelectedColumn();
+  getLineList();
+}, []);
 
   // Group data by branch name
   const groupLinesByBranch = (data) => {
@@ -130,129 +143,251 @@ const ViewLine = () => {
     }
   };
 
-  const SumbitReorder = async () => {
-    try {
-      setReorderLoader(true);
-      const reorderedData =
-        Object.keys(order)?.length > 0 ? sortData(order) : tableData;
-      const response = await POST(`${LINE}reorder/`, reorderedData);
-      if (response?.status === 200) {
-        // Update the original data with reordered data for the selected branch
-        const updatedOriginalData = originalData.map((item) => {
-          const reorderedItem = reorderedData.find((r) => r.id === item.id);
-          return reorderedItem || item;
-        });
-        
-        // Replace items from selected branch with reordered ones
-        const branchItemIds = reorderedData.map(item => item.id);
-        const otherBranchItems = originalData.filter(item => !branchItemIds.includes(item.id));
-        const finalData = [...otherBranchItems, ...reorderedData];
-        
-        setOriginalData(finalData);
-        setTableData(finalData);
-        setGroupedData(groupLinesByBranch(finalData));
-        setReorder(false);
-        setRowReorderred(false);
-        const filtered = header.filter(
-          (item) => !["move", "order"].includes(item.value)
-        );
-        setTableHeader(filtered);
-        setOrder({});
-        setSelectedBranch(null);
-        setShowReset(false);
-        notification.success({
-          message: "Re-Ordered",
-          description: "The order has been updated successfully.",
-          duration: 0,
-        });
-      } else {
-        notification.error({
-          message: "Re-Ordered",
-          description: "Failed to update the order",
-          duration: 0,
-        });
-      }
-      setReorderLoader(false);
-    } catch (e) {
-      setReorderLoader(false);
-      notification.error({
-        message: "Error",
-        description: "Failed to update the order",
-      });
-    }
-  };
-
-  const handleReset = () => {
+const handleReset = () => {
+    // Simply restore originalData which already contains all lines from the selected branch
+    const grouped = groupLinesByBranch(originalData);
+    
+    // CRITICAL FIX: Create fresh pagination state
+    const newPagination = {};
+    Object.keys(grouped).forEach(branchName => {
+      newPagination[branchName] = {
+        displayed: Math.min(LINES_PAGE_SIZE, grouped[branchName].length),
+        total: grouped[branchName].length
+      };
+    });
+    
     setTableData(originalData);
-    setGroupedData(groupLinesByBranch(originalData));
+    setGroupedData(grouped);
+    setLinesPagination(newPagination);
+    
     setShowReset(false);
     setSelectedBranch(null);
     setSearchText("");
+    
     notification.success({
       message: "Data Reset",
-      description: "Restored to the original order successfully.",
+      description: "Restored to the original view successfully.",
     });
   };
 
-  const getLineList = async () => {
-    try {
-      setTableLoader(true);
-      const response = await GET(LINE);
-      if (response?.status === 200) {
-        setTableData(response.data);
-        setOriginalData(response.data);
-        setGroupedData(groupLinesByBranch(response.data));
-
-        const filterCol = ["branch_name", "lineName"];
-        const uniqueOptions = {};
-        filterCol.forEach((col) => {
-          uniqueOptions[col] = new Set();
-        });
-
-        response.data.forEach((item) => {
-          filterCol.forEach((col) => {
-            uniqueOptions[col].add(item[col]);
-          });
-        });
-
-        filterCol.forEach((col) => {
-          setFilterOption((prev) => ({
-            ...prev,
-            [col]: Array.from(uniqueOptions[col]).map((value) => ({
-              text: value,
-              value: value,
-            })),
-          }));
-        });
-
-        const uniqueBranches = [
-          ...new Set(response.data.map((item) => item.branch_name)),
-        ];
-        setBranchOptions(uniqueBranches.map((b) => ({ label: b, value: b })));
-      } else {
-        setTableData([]);
-        setOriginalData([]);
-        setGroupedData({});
+const SumbitReorder = async () => {
+  try {
+    setReorderLoader(true);
+    const reorderedData =
+      Object.keys(order)?.length > 0 ? sortData(order) : tableData;
+    const response = await POST(`${LINE}reorder/`, reorderedData);
+    if (response?.status === 200) {
+      // Get the branch from localStorage
+      const storedBranchName = localStorage.getItem("selected_branch_name");
+      
+      // CRITICAL FIX: Properly update originalData by replacing items from the selected branch
+      // with the reordered items, while keeping other branches unchanged
+      const reorderedIds = new Set(reorderedData.map(item => item.id));
+      
+      // Remove old items from the selected branch and add the reordered ones
+      const updatedOriginalData = [
+        ...originalData.filter(item => !reorderedIds.has(item.id)),
+        ...reorderedData
+      ];
+      
+      // Filter by stored branch to show updated data
+      let finalData = updatedOriginalData;
+      if (storedBranchName) {
+        finalData = updatedOriginalData.filter(
+          (item) => item.branch_name === storedBranchName
+        );
       }
-    } catch (error) {
+      
+      setOriginalData(updatedOriginalData);
+      setTableData(finalData);
+      const grouped = groupLinesByBranch(finalData);
+      setGroupedData(grouped);
+      
+      // Reinitialize pagination with fresh state
+      const newPagination = {};
+      Object.keys(grouped).forEach(branchName => {
+        newPagination[branchName] = {
+          displayed: Math.min(LINES_PAGE_SIZE, grouped[branchName].length),
+          total: grouped[branchName].length
+        };
+      });
+      setLinesPagination(newPagination);
+      
+      setReorder(false);
+      setRowReorderred(false);
+      const filtered = header.filter(
+        (item) => !["move", "order"].includes(item.value)
+      );
+      setTableHeader(filtered);
+      setOrder({});
+      setSelectedBranch(null);
+      setShowReset(false);
+      setSearchText("");
+      setIsDragMode(false);
+      
+      notification.success({
+        message: "Re-Ordered",
+        description: "The order has been updated successfully.",
+        duration: 0,
+      });
+    } else {
+      notification.error({
+        message: "Re-Ordered",
+        description: "Failed to update the order",
+        duration: 0,
+      });
+    }
+    setReorderLoader(false);
+  } catch (e) {
+    setReorderLoader(false);
+    notification.error({
+      message: "Error",
+      description: "Failed to update the order",
+    });
+  }
+};
+
+const clickReorder = () => {
+  // Get branch from localStorage
+  const storedBranchName = localStorage.getItem("selected_branch_name");
+  
+  if (!storedBranchName) {
+    notification.warning({
+      message: "No Branch Selected",
+      description: "Please select a branch from settings.",
+    });
+    return;
+  }
+
+  // CRITICAL FIX: Always use originalData (not the filtered tableData from search)
+  const filteredData = originalData.filter(
+    (item) => item.branch_name === storedBranchName
+  );
+
+  if (filteredData.length === 0) {
+    notification.warning({
+      message: "No Lines Found",
+      description: `No lines available for ${storedBranchName} branch.`,
+    });
+    return;
+  }
+
+  // Clear search state before entering reorder mode
+  setShowReset(false);
+  setSearchText("");
+
+  // Set the selected branch and filtered data
+  setSelectedBranch(storedBranchName);
+  setTableData(filteredData);
+  
+  // Add reorder columns to header
+  setTableHeader((prev) => {
+    return [
+      { label: "Move", value: "move" },
+      { label: "Order", value: "order" },
+      ...prev,
+    ];
+  });
+  
+  // Enable reorder mode directly
+  setReorder(true);
+};
+const getLineList = async () => {
+  try {
+    setTableLoader(true);
+    const response = await GET(LINE);
+    if (response?.status === 200) {
+      // Get branch from localStorage
+      const storedBranchName = localStorage.getItem("selected_branch_name");
+      
+      // Filter data by selected branch from localStorage
+      let filteredData = response.data;
+      if (storedBranchName) {
+        filteredData = response.data.filter(
+          (item) => item.branch_name === storedBranchName
+        );
+      }
+      
+      setTableData(filteredData);
+      setOriginalData(filteredData);
+      const grouped = groupLinesByBranch(filteredData);
+      setGroupedData(grouped);
+
+      // Initialize pagination for each branch
+      Object.keys(grouped).forEach(branchName => {
+        initializeBranchPagination(branchName, grouped[branchName].length);
+      });
+
+      const filterCol = ["branch_name", "lineName"];
+      const uniqueOptions = {};
+      filterCol.forEach((col) => {
+        uniqueOptions[col] = new Set();
+      });
+
+      filteredData.forEach((item) => {
+        filterCol.forEach((col) => {
+          uniqueOptions[col].add(item[col]);
+        });
+      });
+
+      filterCol.forEach((col) => {
+        setFilterOption((prev) => ({
+          ...prev,
+          [col]: Array.from(uniqueOptions[col]).map((value) => ({
+            text: value,
+            value: value,
+          })),
+        }));
+      });
+
+      const uniqueBranches = [
+        ...new Set(filteredData.map((item) => item.branch_name)),
+      ];
+      setBranchOptions(uniqueBranches.map((b) => ({ label: b, value: b })));
+      
+      // Auto-expand the branch header
+      if (storedBranchName) {
+        setExpandedBranches([storedBranchName]);
+      }
+    } else {
       setTableData([]);
       setOriginalData([]);
       setGroupedData({});
-    } finally {
-      setTableLoader(false);
     }
-  };
+  } catch (error) {
+    setTableData([]);
+    setOriginalData([]);
+    setGroupedData({});
+  } finally {
+    setTableLoader(false);
+  }
+};
 
-  const clickReorder = () => {
-    setBranchModalVisible(true);
-    setTableHeader((prev) => {
-      return [
-        { label: "Move", value: "move" },
-        { label: "Order", value: "order" },
-        ...prev,
-      ];
-    });
-  };
+
+// Initialize pagination for a branch
+const initializeBranchPagination = (branchName, totalLines) => {
+  setLinesPagination(prev => ({
+    ...prev,
+    [branchName]: {
+      displayed: Math.min(LINES_PAGE_SIZE, totalLines),
+      total: totalLines
+    }
+  }));
+};
+
+// Load more lines for a specific branch
+const loadMoreLines = (branchName) => {
+  setLinesPagination(prev => {
+    const current = prev[branchName] || { displayed: 0, total: 0 };
+    return {
+      ...prev,
+      [branchName]: {
+        ...current,
+        displayed: Math.min(current.displayed + LINES_PAGE_SIZE, current.total)
+      }
+    };
+  });
+};
 
   const handleReOrder = (event, row) => {
     event.preventDefault();
@@ -266,16 +401,37 @@ const ViewLine = () => {
   };
 
   const handleCancel = () => {
-    const filtered = header.filter(
-      (item) => !["move", "order"].includes(item.value)
+  const filtered = header.filter(
+    (item) => !["move", "order"].includes(item.value)
+  );
+  setIsDragMode(false);
+  setTableHeader(filtered);
+  setReorder(false);
+  setSelectedBranch(null);
+  
+  // Get branch from localStorage and restore filtered data
+  const storedBranchName = localStorage.getItem("selected_branch_name");
+  if (storedBranchName) {
+    const filteredData = originalData.filter(
+      (item) => item.branch_name === storedBranchName
     );
-    setIsDragMode(false);
-    setTableHeader(filtered);
-    setReorder(false);
-    setSelectedBranch(null);
+    setTableData(filteredData);
+    const grouped = groupLinesByBranch(filteredData);
+    setGroupedData(grouped);
+    
+    // Reinitialize pagination
+    Object.keys(grouped).forEach(branchName => {
+      initializeBranchPagination(branchName, grouped[branchName].length);
+    });
+  } else {
     setTableData(originalData);
     setGroupedData(groupLinesByBranch(originalData));
-  };
+  }
+  
+  // Reset search if it was active
+  setSearchText("");
+  setShowReset(false);
+};
 
   const onDelete = async (record) => {
     try {
@@ -336,6 +492,7 @@ const ViewLine = () => {
     }
   };
 
+
 const handleLineAction = (branchName, lineId) => {
   const key = `${branchName}-${lineId}`;
   // Close any open swipe first
@@ -373,103 +530,87 @@ const handleLineAction = (branchName, lineId) => {
     }
   };
 
-  // NEW: Handle branch collapse change
-  const handleBranchChange = (keys) => {
-    setExpandedBranches(keys);
-    // When collapsing a branch (keys becomes empty or reduces), close all expanded lines
-    if (keys.length === 0 || keys.length < expandedBranches.length) {
-      setExpandedLines({});
-      setOpenSwipeId(null);
-    }
-  };
 
-  const handleBranchSubmit = () => {
-    if (!selectedBranch) {
-      notification.warning({
-        message: "Select a Branch",
-        description: "Please choose a branch before continuing.",
-      });
-      return;
-    }
 
-    const filteredData = originalData.filter(
-      (item) => item.branch_name === selectedBranch
-    );
+  // const handleBranchSubmit = () => {
+  //   if (!selectedBranch) {
+  //     notification.warning({
+  //       message: "Select a Branch",
+  //       description: "Please choose a branch before continuing.",
+  //     });
+  //     return;
+  //   }
 
-    setTableData(filteredData);
-    setBranchModalVisible(false);
-    setReorder(true);
-    setTableHeader((prev) => [
-      { label: "Move", value: "move" },
-      { label: "Order", value: "order" },
-      ...prev,
-    ]);
-  };
+  //   const filteredData = originalData.filter(
+  //     (item) => item.branch_name === selectedBranch
+  //   );
 
-  const handleSearch = () => {
-    const query = searchText.trim().toLowerCase();
+  //   setTableData(filteredData);
+  //   setBranchModalVisible(false);
+  //   setReorder(true);
+  //   setTableHeader((prev) => [
+  //     { label: "Move", value: "move" },
+  //     { label: "Order", value: "order" },
+  //     ...prev,
+  //   ]);
+  // };
 
-    if (!query) {
-      setTableData(originalData);
-      setGroupedData(groupLinesByBranch(originalData));
-      setSearchModalVisible(false);
-      notification.info({
-        message: "Reset Search",
-        description: "Showing all lines again.",
-      });
-      return;
-    }
+const handleSearch = () => {
+  const query = searchText.trim().toLowerCase();
 
-    const filtered = originalData.filter((item) => {
-      const lineName = (item.lineName || "").toLowerCase();
-      const branch = (item.branch_name || "").toLowerCase();
-      const lineType = (item.lineType || "").toLowerCase();
-
-      return (
-        lineName.includes(query) ||
-        branch.includes(query) ||
-        lineType.includes(query)
-      );
+  if (!query) {
+    setTableData(originalData);
+    const grouped = groupLinesByBranch(originalData);
+    setGroupedData(grouped);
+    
+    // Reinitialize pagination
+    Object.keys(grouped).forEach(branchName => {
+      initializeBranchPagination(branchName, grouped[branchName].length);
     });
-
-    setTableData(filtered);
-    setGroupedData(groupLinesByBranch(filtered));
+    
     setSearchModalVisible(false);
-    setShowReset(true);
+    setShowReset(false);
+    notification.info({
+      message: "Reset Search",
+      description: "Showing all lines again.",
+    });
+    return;
+  }
 
-    if (filtered.length === 0) {
-      notification.warning({
-        message: "No Results",
-        description: `No matches found for "${searchText}".`,
-      });
-    } else {
-      notification.success({
-        message: "Search Complete",
-        description: `${filtered.length} result(s) found for "${searchText}".`,
-      });
-    }
-  };
+  // Filter only by line name and line type (NOT branch name)
+  const filtered = originalData.filter((item) => {
+    const lineName = (item.lineName || "").toLowerCase();
+    const lineType = (item.lineType || "").toLowerCase();
 
-  const branchSelectionModal = (
-    <Modal
-      title="Select Branch for Re-Ordering"
-      open={branchModalVisible}
-      onOk={handleBranchSubmit}
-      onCancel={() => setBranchModalVisible(false)}
-      okText="Continue"
-    >
-      <p style={{ marginBottom: 10 }}>Choose a branch to view its line list:</p>
-      <Select
-        style={{ width: "100%" }}
-        placeholder="Select Branch"
-        options={branchOptions}
-        value={selectedBranch}
-        onChange={setSelectedBranch}
-        showSearch
-        optionFilterProp="label"
-      />
-    </Modal>
-  );
+    return lineName.includes(query) || lineType.includes(query);
+  });
+
+  setTableData(filtered);
+  const grouped = groupLinesByBranch(filtered);
+  setGroupedData(grouped);
+  
+  // Reinitialize pagination for filtered results
+  Object.keys(grouped).forEach(branchName => {
+    initializeBranchPagination(branchName, grouped[branchName].length);
+  });
+  
+  setSearchModalVisible(false);
+  setShowReset(true);
+
+  if (filtered.length === 0) {
+    notification.warning({
+      message: "No Results",
+      description: `No matches found for "${searchText}".`,
+    });
+  } else {
+    notification.success({
+      message: "Search Complete",
+      description: `${filtered.length} result(s) found for "${searchText}".`,
+    });
+  }
+};
+
+  
 
   const searchModal = (
     <Modal
@@ -573,242 +714,316 @@ const handleLineAction = (branchName, lineId) => {
           )}
         </div>
       </div>
-
-      {branchSelectionModal}
       {searchModal}
 
       {tableLoader && <Loader />}
+{reOrder && !branchModalVisible ? (
+  <div>
+    {/* Table */}
+    <Table
+      data={tableData}
+      reOrder={isDragMode}
+      Header={
+        isDragMode
+          ? [
+              
+              { label: "S.No", value: "index" },
+              { label: "Line Name", value: "lineName" },
+              { label: "Move", value: "move" },
+            ]
+          : [
+              
+              { label: "S.No", value: "index" },
+              { label: "Reorder", value: "order" },
+              { label: "Line Name", value: "lineName" },
+            ]
+      }
+      filterOption={filterOption}
+      handleDragEnd={isDragMode ? handleDragEnd : undefined}
+      handleReOrder={!isDragMode ? handleReOrder : undefined}
+      deleteLoader={deleteLoader}
+      setShowConfirm={setShowConfirm}
+      showConfirm={showConfirm}
+      name="line"
+    />
 
-      {!reOrder && !isMobile && (
-        <div style={{ marginBottom: 10 }}>
-          <ColumnDropdown
-            options={header.filter(
-              (list) => !hiddenColumns.includes(list?.value)
-            )}
-            onChange={handleColumnChange}
-            name={"line_column"}
-            selectedColumn={selectedColumn}
-          />
-        </div>
-      )}
-
-      {reOrder && !branchModalVisible ? (
-        <div>
-          {/* Table */}
-          <Table
-            data={tableData}
-            reOrder={isDragMode}
-            Header={
-              isDragMode
-                ? [
-                    
-                    { label: "S.No", value: "index" },
-                    { label: "Line Name", value: "lineName" },
-                    { label: "Move", value: "move" },
-                  ]
-                : [
-                    
-                    { label: "S.No", value: "index" },
-                    { label: "Reorder", value: "order" },
-                    { label: "Line Name", value: "lineName" },
-                  ]
-            }
-            filterOption={filterOption}
-            handleDragEnd={isDragMode ? handleDragEnd : undefined}
-            handleReOrder={!isDragMode ? handleReOrder : undefined}
-            deleteLoader={deleteLoader}
-            setShowConfirm={setShowConfirm}
-            showConfirm={showConfirm}
-            name="line"
-          />
-
-          {/* Action Buttons */}
-          <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-            <Button
-              type="primary"
-              onClick={SumbitReorder}
-              loading={reorderLoader}
-              disabled={reorderLoader}
-            >
-              Submit
-            </Button>
-            <Button onClick={handleCancel}>Cancel</Button>
-          </div>
-        </div>
-      ) : (
-        // GROUPED LIST VIEW BY BRANCH
-       <div
-  id="scrollableDiv"
-  style={{
-    height: 500,
-    width:"auto",
-    overflow: "auto",
-    padding: "10px",
-    marginTop: 20,
-  }}
->
-  <Collapse
-    accordion={true}
-    activeKey={expandedBranches}
-    onChange={handleBranchChange}
-    
+    {/* Action Buttons */}
+    <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+      <Button
+        type="primary"
+        onClick={SumbitReorder}
+        loading={reorderLoader}
+        disabled={reorderLoader}
+      >
+        Submit
+      </Button>
+      <Button onClick={handleCancel}>Cancel</Button>
+    </div>
+  </div>
+) : (
+  // GROUPED LIST VIEW BY BRANCH
+  <div
+    id="scrollableDiv"
     style={{
-      background: "#fff",
-      border: "none",
+      height: 500,
+      width: "auto",
+      overflow: "auto",
+      padding: "10px",
+      marginTop: 20,
     }}
-    // expandIconPosition="right"
-    expandIcon={() => null}
   >
-    {Object.keys(groupedData).map((branchName) => {
-      const isActive = expandedBranches.includes(branchName);
-
-      return (
-        <Panel
-          header={
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Avatar
-          src={branchIcon} // your branch icon here
-        >
-          {branchName?.charAt(0)?.toUpperCase()}
-        </Avatar>
-        <span style={{ fontWeight: 600, fontSize: "18px", color: "#262626" }}>
-          {branchName}
+    {/* Search Results Header - Show only when searching */}
+    {showReset && searchText && (
+      <div
+        style={{
+          padding: "12px 0px",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "left"
+         
+        }}
+      >
+        <span style={{ fontSize: "14px", color: "#8c8c8c" }}>
+          Search Results:{" "}
+          <span style={{ fontWeight: 600, color: "#1677ff", fontSize: "15px" }}>
+            "{searchText}"
+          </span>
+        </span>
+        <span style={{ 
+          marginLeft: "12px", 
+          fontSize: "13px", 
+          color: "#52c41a",
+          fontWeight: 500 
+        }}>
+          ({Object.values(groupedData).flat().length} results)
         </span>
       </div>
-              <Badge
-                count={groupedData[branchName].length}
-                style={{
-                  backgroundColor: "#52c41a",
-                  fontWeight: 500,
-                  boxShadow: "0 0 0 1px #fff"
-                }}
-              />
-            </div>
-          }
+    )}
+
+    {Object.keys(groupedData).map((branchName) => {
+      return (
+        <div
           key={branchName}
           style={{
             marginBottom: "12px",
             border: "1px solid #e8e8e8",
             borderRadius: "8px",
             overflow: "hidden",
-            backgroundColor: isActive ? "#f5f5f5" : "#fff"
+            backgroundColor: "#fff"
           }}
-          className={isActive ? "active-panel" : ""}
         >
-          <InfiniteScroll
-            dataLength={groupedData[branchName].length}
-            next={() => getLineList(branchName)} // function to load more lines for this branch
-            // state per branch for more data
-            loader={<Skeleton avatar paragraph={{ rows: 1 }} active />}
-            endMessage={<Divider plain>End of List ✅</Divider>}
-            scrollableTarget={`scrollableDiv-${branchName}`} 
+         
+
+          {/* Branch Header - Always Visible, Not Collapsible */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px",
+              backgroundColor: "#f5f5f5",
+              borderBottom: "1px solid #e8e8e8"
+            }}
           >
-            <div style={{ maxHeight: 280, overflow: "auto" }}>
-            <List
-              dataSource={groupedData[branchName]}
-              style={{ background: "#fafafa" }}
-              renderItem={(line) => {
-                const isExpanded = expandedLines[`${branchName}-${line.id}`];
-
-                return (
-                  <div
-                    key={line.id}
-                    id={`line-item-${line.id}`}
-                    style={{
-                      borderBottom: "2px solid #f0f0f0",
-                      padding: 0,
-                      background: "#fff",
-                      borderRadius: "6px",
-                      overflow: "hidden"
-                    }}
-                  >
-                    {isMobile ? (
-                      <SwipeablePanel
-                        item={line}
-                        index={line.id}
-                        titleKey="lineName"
-                        name="line"
-                        avatarSrc={lineIcon}
-                        onSwipeRight={!isExpanded ? () => handleEditLine(line) : undefined}
-                        onSwipeLeft={!isExpanded ? () => onDelete(line) : undefined}
-                        isExpanded={isExpanded}
-                        onExpandToggle={() => handleLineAction(branchName, line.id)}
-                        renderContent={() => <LineCollapseContent line={line} />}
-                        isSwipeOpen={openSwipeId === line.id}
-                        onSwipeStateChange={(isOpen) => handleSwipeStateChange(line.id, isOpen)}
-                      />
-                    ) : (
-                      <List.Item
-                        onClick={() => handleLineAction(branchName, line.id)}
-                        style={{
-                          cursor: "pointer",
-                          background: isExpanded ? "#f0f5ff" : "#fff",
-                          padding: "12px 16px",
-                          transition: "all 0.3s ease"
-                        }}
-                      >
-                        <List.Item.Meta
-                          avatar={
-                            <Avatar
-                              icon={lineIcon}
-                              style={{
-                                backgroundColor: "#1677ff",
-                                fontSize: "16px",
-                                fontWeight: 600
-                              }}
-                            >
-                              {line.lineName?.charAt(0)?.toUpperCase()}
-                            </Avatar>
-                          }
-                          title={
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                              <span style={{ fontWeight: 500, color: "#262626", fontSize: "15px" }}>
-                                {line.lineName}
-                              </span>
-
-                              <Dropdown
-                                overlay={
-                                  <Menu>
-                                    <Menu.Item onClick={() => handleEditLine(line)}>Edit</Menu.Item>
-                                    <Menu.Item danger onClick={() => onDelete(line)}>Delete</Menu.Item>
-                                  </Menu>
-                                }
-                                trigger={["click"]}
-                              >
-                                <EllipsisOutlined
-                                  style={{ fontSize: "20px", color: "#8c8c8c", cursor: "pointer", padding: "4px" }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </Dropdown>
-                            </div>
-                          }
-                          description={
-                            <span style={{ fontSize: "13px", color: "#8c8c8c" }}>
-                              {line.lineType} • {line.installment} installments
-                            </span>
-                          }
-                        />
-                        {isExpanded && (
-                          <div style={{ padding: "5px", background: "#fafafa", borderTop: "1px solid #e8e8e8" }}>
-                            <LineCollapseContent line={line} />
-                          </div>
-                        )}
-                      </List.Item>
-                    )}
-                  </div>
-                );
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar src={branchIcon}>
+                {branchName?.charAt(0)?.toUpperCase()}
+              </Avatar>
+              <span style={{ fontWeight: 600, fontSize: "18px", color: "#262626" }}>
+                {branchName}
+              </span>
+            </div>
+            <Badge
+              count={groupedData[branchName].length}
+              style={{
+                backgroundColor: showReset ? "#1677ff" : "#52c41a",
+                fontWeight: 500,
+                boxShadow: "0 0 0 1px #fff"
               }}
             />
-            </div>
-          </InfiniteScroll>
-        </Panel>
+          </div>
+
+          {/* Lines List with Infinite Scroll - Always Expanded */}
+          <div 
+            id={'scrollableDiv-' + branchName}
+            style={{ 
+              maxHeight: 400, 
+              overflow: "auto", 
+              padding: 0
+            }}
+          >
+            <InfiniteScroll
+              dataLength={linesPagination[branchName]?.displayed || LINES_PAGE_SIZE}
+              next={() => loadMoreLines(branchName)}
+              hasMore={
+                (linesPagination[branchName]?.displayed || 0) < 
+                (linesPagination[branchName]?.total || 0)
+              }
+              loader={
+                <div style={{ textAlign: 'center', padding: '16px' }}>
+                  <Skeleton avatar paragraph={{ rows: 1 }} active />
+                </div>
+              }
+              endMessage={
+                <Divider plain style={{ margin: "16px 0" }}>
+                  <span style={{ color: "red", fontSize: "18px", fontWeight: "bold" }}>★*</span>
+                  <span style={{ color: "#595959", fontSize: "14px" }}>
+                    End of{" "}
+                    <span style={{ fontWeight: 600, color: "#262626" }}>
+                      {branchName}
+                    </span>{" "}
+                    <span style={{ color: "red", fontSize: "18px", fontWeight: "bold" }}>*★</span>
+                  </span>
+                </Divider>
+              }
+              scrollableTarget={'scrollableDiv-' + branchName}
+            >
+              <List
+                dataSource={
+                  groupedData[branchName].slice(
+                    0, 
+                    linesPagination[branchName]?.displayed || LINES_PAGE_SIZE
+                  )
+                }
+                style={{ background: "#fafafa", margin: 0 }}
+                renderItem={(line) => {
+                  const isExpanded = expandedLines[branchName + '-' + line.id];
+
+                  return (
+                    <div
+                      key={line.id}
+                      id={'line-item-' + line.id}
+                      style={{
+                        borderBottom: "2px solid #f0f0f0",
+                        padding: 0,
+                        background: "#fff",
+                      }}
+                    >
+                      {isMobile ? (
+                        <SwipeablePanel
+                          item={line}
+                          index={line.id}
+                          titleKey="lineName"
+                          name="line"
+                          avatarSrc={lineIcon}
+                          onSwipeRight={!isExpanded ? () => handleEditLine(line) : undefined}
+                          onSwipeLeft={!isExpanded ? () => onDelete(line) : undefined}
+                          isExpanded={isExpanded}
+                          onExpandToggle={() => handleLineAction(branchName, line.id)}
+                          renderContent={() => (
+                            isExpanded ? (
+                              <LineCollapseContent line={line} />
+                            ) : null
+                          )}
+                          isSwipeOpen={openSwipeId === line.id}
+                          onSwipeStateChange={(isOpen) => handleSwipeStateChange(line.id, isOpen)}
+                        />
+                      ) : (
+                        <>
+                          <List.Item
+                            style={{
+                              background: isExpanded ? "#f9f9f9" : "#fff",
+                              cursor: "default",
+                              padding: "12px 16px",
+                            }}
+                          >
+                            <List.Item.Meta
+                              avatar={
+                                <div style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  borderRadius: "50%",
+                                  backgroundColor: "#000",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0
+                                }}>
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                                  </svg>
+                                </div>
+                              }
+                              title={
+                                <div
+                                  onClick={() => handleLineAction(branchName, line.id)}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    width: "100%",
+                                    cursor: "pointer",
+                                    padding: "6px 0",
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 600, color: "black" }}>
+                                    {line.lineName}
+                                  </span>
+                                  <Dropdown
+                                    overlay={
+                                      <Menu>
+                                        <Menu.Item 
+                                          key="edit"
+                                          onClick={(e) => {
+                                            e.domEvent.stopPropagation();
+                                            handleEditLine(line);
+                                          }}
+                                        >
+                                          Edit
+                                        </Menu.Item>
+                                        <Menu.Item 
+                                          key="delete"
+                                          danger 
+                                          onClick={(e) => {
+                                            e.domEvent.stopPropagation();
+                                            onDelete(line);
+                                          }}
+                                        >
+                                          Delete
+                                        </Menu.Item>
+                                      </Menu>
+                                    }
+                                    trigger={["click"]}
+                                  >
+                                    <EllipsisOutlined
+                                      style={{
+                                        fontSize: "22px",
+                                        color: "#999",
+                                        cursor: "pointer",
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </Dropdown>
+                                </div>
+                              }
+                            />
+                          </List.Item>
+
+                          {isExpanded && (
+                            <div style={{ marginTop: 6, padding: "0 16px 16px 16px", background: "#f9f9f9" }}>
+                              <LineCollapseContent line={line} />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            </InfiniteScroll>
+          </div>
+        </div>
       );
     })}
-  </Collapse>
-</div>
 
-      )}
+    {Object.keys(groupedData).length === 0 && !tableLoader && (
+      <div style={{ textAlign: "center", padding: "40px", color: "#8c8c8c" }}>
+        <p>No lines found {showReset && searchText ? 'for "' + searchText + '"' : "for the selected branch"}</p>
+      </div>
+    )}
+  </div>
+)}
 
       {!reOrder && (
         <FloatButton
